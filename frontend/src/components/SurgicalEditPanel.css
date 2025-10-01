@@ -1,0 +1,281 @@
+.surgical-edit-panel {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  width: 400px;
+  max-height: 600px;
+  background: linear-gradient(135deg, #1e1e1e 0%, #2d2d2d 100%);
+  border: 1px solid #3d3d3d;
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  overflow: hidden;
+  z-index: 1000;
+  animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.surgical-edit-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+}
+
+.surgical-edit-header h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  color: white;
+  font-size: 24px;
+  cursor: pointer;
+  padding: 0;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: background 0.2s;
+}
+
+.close-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.selected-element-info {
+  padding: 12px 20px;
+  background: #2a2a2a;
+  border-bottom: 1px solid #3d3d3d;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.element-tag {
+  background: #4a4a4a;
+  color: #4fc3f7;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-family: 'Courier New', monospace;
+}
+
+.element-class {
+  background: #4a4a4a;
+  color: #81c784;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-family: 'Courier New', monospace;
+}
+
+.element-id {
+  background: #4a4a4a;
+  color: #ffb74d;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-family: 'Courier New', monospace;
+}
+
+.surgical-edit-form {
+  padding: 20px;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.form-group {
+  margin-bottom: 16px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 8px;
+  color: #e0e0e0;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.form-group input {
+  width: 100%;
+  padding: 10px 12px;
+  background: #2a2a2a;
+  border: 1px solid #3d3d3d;
+  border-radius: 6px;
+  color: #e0e0e0;
+  font-size: 14px;
+  transition: border-color 0.2s;
+}
+
+.form-group input:focus {
+  outline: none;
+  border-color: #667eea;
+}
+
+.form-group input::placeholder {
+  color: #888;
+}
+
+.quick-actions {
+  margin-bottom: 16px;
+}
+
+.quick-actions label {
+  display: block;
+  margin-bottom: 8px;
+  color: #e0e0e0;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.quick-actions-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+}
+
+.quick-action-btn {
+  padding: 8px 12px;
+  background: #2a2a2a;
+  border: 1px solid #3d3d3d;
+  border-radius: 6px;
+  color: #e0e0e0;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.quick-action-btn:hover:not(:disabled) {
+  background: #3a3a3a;
+  border-color: #667eea;
+  transform: translateY(-1px);
+}
+
+.quick-action-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.apply-btn {
+  width: 100%;
+  padding: 12px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border: none;
+  border-radius: 6px;
+  color: white;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.apply-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+.apply-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.progress-message {
+  padding: 12px 20px;
+  background: #2a2a2a;
+  border-top: 1px solid #3d3d3d;
+  color: #4fc3f7;
+  font-size: 13px;
+  text-align: center;
+  animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
+.result-message {
+  padding: 12px 20px;
+  border-top: 1px solid #3d3d3d;
+  font-size: 13px;
+  text-align: center;
+  font-weight: 500;
+}
+
+.result-message.success {
+  background: rgba(129, 199, 132, 0.1);
+  color: #81c784;
+}
+
+.result-message.error {
+  background: rgba(239, 83, 80, 0.1);
+  color: #ef5350;
+}
+
+.surgical-edit-info {
+  padding: 16px 20px;
+  background: #2a2a2a;
+  border-top: 1px solid #3d3d3d;
+}
+
+.surgical-edit-info p {
+  margin: 0 0 12px 0;
+  color: #b0b0b0;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.edit-types {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.edit-type {
+  background: #3a3a3a;
+  color: #b0b0b0;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+}
+
+/* Scrollbar styling */
+.surgical-edit-form::-webkit-scrollbar {
+  width: 6px;
+}
+
+.surgical-edit-form::-webkit-scrollbar-track {
+  background: #2a2a2a;
+}
+
+.surgical-edit-form::-webkit-scrollbar-thumb {
+  background: #4a4a4a;
+  border-radius: 3px;
+}
+
+.surgical-edit-form::-webkit-scrollbar-thumb:hover {
+  background: #5a5a5a;
+}
+
