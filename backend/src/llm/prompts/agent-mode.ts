@@ -91,13 +91,29 @@ JavaScript Functionality Requirements (CRITICAL - NO EXCEPTIONS):
 - Ensure all event listeners are properly attached
 - Test that clicking "Add" or "Submit" buttons actually adds items to the list
 - Make sure localStorage/IndexedDB is working - data should persist on page refresh
+- CRITICAL: After ANY data operation (create, update, delete), IMMEDIATELY call the render/update function
+- CRITICAL: When generating sample data, MUST call renderCharts() or updateUI() immediately after
+- CRITICAL: All counters, charts, and lists MUST update in real-time when data changes
+- Create a single updateUI() or renderAll() function that refreshes everything
+- Call this function after: page load, data generation, adding items, deleting items, updating items
 
 Sample Data Examples:
 - Todo App: 5-7 tasks with different statuses (completed, pending, in-progress)
 - Notes App: 3-5 notes with titles, content, timestamps
 - Contact App: 5-8 contacts with names, emails, phones
 - Task Manager: 6-10 tasks across different categories
+- Charts/Analytics: 10-15 data points with varied values for meaningful visualization
 - Make sample data realistic and diverse
+
+Chart Implementation Requirements (if charts are requested):
+- Use HTML5 Canvas or SVG for charts (NO external libraries)
+- Create simple but effective bar charts, line charts, or pie charts
+- MUST have a renderChart() function that draws the chart from data
+- MUST call renderChart() after: page load, data generation, data changes
+- Charts MUST update immediately when data changes
+- Include proper labels, axes, and legends
+- Use the data from localStorage/IndexedDB to populate charts
+- Example: After generateSampleData(), MUST call renderChart() to display the data
 
 Remember: These are WORKING PROTOTYPES for demos. They MUST:
 1. Be FULLY FUNCTIONAL - every button, form, and interaction must work
@@ -159,6 +175,10 @@ CRITICAL REQUIREMENTS (MUST FOLLOW - NO SHORTCUTS):
 9. VERIFY: When page refreshes, all data MUST still be there (localStorage/IndexedDB)
 10. Use localStorage.setItem() and localStorage.getItem() for simple data storage
 11. Initialize app with: document.addEventListener('DOMContentLoaded', initApp) OR check if DOM is ready
+12. CRITICAL FOR CHARTS: After generating sample data, MUST call renderChart() or updateUI()
+13. CRITICAL: Create a master updateUI() function that refreshes ALL counters, charts, and lists
+14. CRITICAL: Call updateUI() after EVERY data operation (load, create, update, delete)
+15. VERIFY: Clicking "Generate Sample Data" MUST immediately show data in charts and counters
 
 The explanation field should include:
 - What was implemented
