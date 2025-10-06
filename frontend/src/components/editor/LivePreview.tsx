@@ -4,14 +4,18 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useEditorStore } from '../../store/useEditorStore';
+import { useHistoryStore } from '../../store/useHistoryStore';
 import { useVisualEditor } from '../../hooks/useVisualEditor';
+import { useKeyboardShortcuts } from '../../hooks/useKeyboardShortcuts';
 import { PropertyPanel } from '../PropertyPanel';
 import { SurgicalEditPanel } from '../SurgicalEditPanel';
+import { HistoryTimeline } from '../HistoryTimeline';
 import '../PropertyPanel.css';
 
 export function LivePreview() {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const { currentCode } = useEditorStore();
+  const { undo, redo, canUndo, canRedo, getHistory } = useHistoryStore();
   const {
     isVisualEditMode,
     selectedElement,
@@ -23,8 +27,12 @@ export function LivePreview() {
     setupIframeListeners,
   } = useVisualEditor();
 
+  // Enable keyboard shortcuts
+  useKeyboardShortcuts();
+
   const [showPropertyPanel, setShowPropertyPanel] = useState(false);
   const [showSurgicalEditPanel, setShowSurgicalEditPanel] = useState(false);
+  const [showHistoryTimeline, setShowHistoryTimeline] = useState(false);
 
   // Separate effect for rendering content
   useEffect(() => {
@@ -139,6 +147,33 @@ export function LivePreview() {
         {currentCode.html && (
           <div className="flex items-center justify-between px-4 py-2 bg-gray-100 border-b">
             <div className="flex items-center gap-2">
+              {/* Undo/Redo Controls */}
+              <div className="flex items-center gap-1 mr-2 border-r pr-2">
+                <button
+                  onClick={undo}
+                  disabled={!canUndo()}
+                  className="px-2 py-1.5 rounded text-sm font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed bg-white text-gray-700 border border-gray-300 hover:bg-gray-50 disabled:hover:bg-white"
+                  title={`Undo (${navigator.platform.includes('Mac') ? 'Cmd' : 'Ctrl'}+Z)`}
+                >
+                  ↶
+                </button>
+                <button
+                  onClick={redo}
+                  disabled={!canRedo()}
+                  className="px-2 py-1.5 rounded text-sm font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed bg-white text-gray-700 border border-gray-300 hover:bg-gray-50 disabled:hover:bg-white"
+                  title={`Redo (${navigator.platform.includes('Mac') ? 'Cmd+Shift+Z' : 'Ctrl+Y'})`}
+                >
+                  ↷
+                </button>
+                <button
+                  onClick={() => setShowHistoryTimeline(true)}
+                  className="px-2 py-1.5 rounded text-sm font-medium transition-colors bg-white text-gray-700 border border-gray-300 hover:bg-gray-50"
+                  title="View History"
+                >
+                  📜 {getHistory().length}
+                </button>
+              </div>
+
               <button
                 onClick={toggleVisualEditMode}
                 className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${
@@ -185,7 +220,7 @@ export function LivePreview() {
               ref={iframeRef}
               className="w-full h-full border-0"
               title="Preview"
-              sandbox="allow-scripts allow-same-origin"
+              sandbox="allow-scripts allow-same-origin allow-forms"
             />
           ) : (
             <div className="flex items-center justify-center h-full text-muted-foreground">
@@ -223,6 +258,12 @@ export function LivePreview() {
           onClose={() => setShowSurgicalEditPanel(false)}
         />
       )}
+
+      {/* History Timeline */}
+      <HistoryTimeline
+        isOpen={showHistoryTimeline}
+        onClose={() => setShowHistoryTimeline(false)}
+      />
     </div>
   );
 }

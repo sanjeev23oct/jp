@@ -4,8 +4,9 @@
 
 import { create } from 'zustand';
 import { ChatMessage, ChatMode, MessageRole } from '../types/chat';
-import { apiService } from '../services/api';
 import { useEditorStore } from './useEditorStore';
+import { useHistoryStore } from './useHistoryStore';
+import { AgentGenerationCommand, createSnapshot } from '../lib/commands';
 
 interface ChatState {
   messages: ChatMessage[];
@@ -78,7 +79,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
-      let generatedCode: any = null;
 
       // Track messages by their IDs
       const messageMap = new Map<string, ChatMessage>();
@@ -129,7 +129,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
                 }));
               } else if (event.type === 'Custom' && event.name === 'code_generated') {
                 console.log('📦 Received code_generated event:', event.value);
-                generatedCode = event.value;
+
+                // Create snapshot before generation
+                const beforeSnapshot = createSnapshot();
 
                 // Immediately update the editor with generated code
                 const { html, css, js } = event.value;
@@ -143,6 +145,19 @@ export const useChatStore = create<ChatState>((set, get) => ({
                   css: css || '',
                   js: js || ''
                 });
+
+                // Create snapshot after generation
+                const afterSnapshot = createSnapshot();
+
+                // Add to history if in agent mode
+                if (state.mode === ChatMode.AGENT) {
+                  const command = new AgentGenerationCommand(
+                    beforeSnapshot,
+                    afterSnapshot,
+                    content
+                  );
+                  useHistoryStore.getState().addCommand(command);
+                }
               }
             } catch (e) {
               console.error('Failed to parse event:', e);

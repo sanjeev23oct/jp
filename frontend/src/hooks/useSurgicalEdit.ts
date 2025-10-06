@@ -4,6 +4,8 @@
 
 import { useState } from 'react';
 import { useEditorStore } from '../store/useEditorStore';
+import { useHistoryStore } from '../store/useHistoryStore';
+import { SurgicalEditCommand, createSnapshot } from '../lib/commands';
 
 interface SurgicalEditRequest {
   description: string;
@@ -57,8 +59,34 @@ export const useSurgicalEdit = () => {
       const data = await response.json();
 
       if (data.success && data.updatedCode) {
+        // Determine which file was modified
+        let fileType: 'html' | 'css' | 'js' = 'html';
+        let beforeContent = currentCode.html;
+        let afterContent = data.updatedCode.html;
+
+        if (currentCode.css !== data.updatedCode.css) {
+          fileType = 'css';
+          beforeContent = currentCode.css;
+          afterContent = data.updatedCode.css;
+        } else if (currentCode.js !== data.updatedCode.js) {
+          fileType = 'js';
+          beforeContent = currentCode.js;
+          afterContent = data.updatedCode.js;
+        }
+
+        // Create history command
+        const command = new SurgicalEditCommand(
+          fileType,
+          beforeContent,
+          afterContent,
+          `Surgical edit: ${request.description.substring(0, 50)}${request.description.length > 50 ? '...' : ''}`
+        );
+
         // Update the editor with new code
         setCode(data.updatedCode);
+
+        // Add to history
+        useHistoryStore.getState().addCommand(command);
 
         return {
           success: true,
@@ -132,7 +160,35 @@ export const useSurgicalEdit = () => {
               if (event === 'progress' && onProgress) {
                 onProgress(data.message);
               } else if (event === 'complete') {
+                // Determine which file was modified
+                let fileType: 'html' | 'css' | 'js' = 'html';
+                let beforeContent = currentCode.html;
+                let afterContent = data.updatedCode.html;
+
+                if (currentCode.css !== data.updatedCode.css) {
+                  fileType = 'css';
+                  beforeContent = currentCode.css;
+                  afterContent = data.updatedCode.css;
+                } else if (currentCode.js !== data.updatedCode.js) {
+                  fileType = 'js';
+                  beforeContent = currentCode.js;
+                  afterContent = data.updatedCode.js;
+                }
+
+                // Create history command
+                const command = new SurgicalEditCommand(
+                  fileType,
+                  beforeContent,
+                  afterContent,
+                  `Surgical edit: ${request.description.substring(0, 50)}${request.description.length > 50 ? '...' : ''}`
+                );
+
+                // Update the editor
                 setCode(data.updatedCode);
+
+                // Add to history
+                useHistoryStore.getState().addCommand(command);
+
                 result = {
                   success: true,
                   updatedCode: data.updatedCode,

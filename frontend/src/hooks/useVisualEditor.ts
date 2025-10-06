@@ -1,5 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import { useEditorStore } from '../store/useEditorStore';
+import { useHistoryStore } from '../store/useHistoryStore';
+import { VisualEditCommand, createSnapshot } from '../lib/commands';
 
 interface SelectedElement {
   tagName: string;
@@ -90,27 +92,36 @@ export const useVisualEditor = () => {
     if (!selectedElement?.element) return;
 
     const element = selectedElement.element;
-    let needsHtmlUpdate = false;
 
-    // Update text content
+    // Update text content - apply directly without HTML update
     if (updates.textContent !== undefined) {
       element.textContent = updates.textContent;
-      needsHtmlUpdate = true;
+      // Update state to reflect change
+      setSelectedElement(prev => prev ? {
+        ...prev,
+        textContent: updates.textContent || ''
+      } : null);
     }
 
-    // Update className
+    // Update className - apply directly without HTML update
     if (updates.className !== undefined) {
       element.className = updates.className;
-      needsHtmlUpdate = true;
+      setSelectedElement(prev => prev ? {
+        ...prev,
+        className: updates.className || ''
+      } : null);
     }
 
-    // Update id
+    // Update id - apply directly without HTML update
     if (updates.id !== undefined) {
       element.id = updates.id;
-      needsHtmlUpdate = true;
+      setSelectedElement(prev => prev ? {
+        ...prev,
+        id: updates.id || ''
+      } : null);
     }
 
-    // Update styles - apply directly to element without triggering HTML update
+    // Update styles - apply directly to element as inline styles
     if (updates.styles) {
       Object.entries(updates.styles).forEach(([property, value]) => {
         if (value) {
@@ -125,38 +136,32 @@ export const useVisualEditor = () => {
       } : null);
     }
 
-    // Only update HTML if structural changes were made
-    if (needsHtmlUpdate) {
-      const bodyContent = element.ownerDocument?.body.innerHTML || '';
-      updateHtml(bodyContent);
-
-      // After HTML update, we need to re-select the element
-      // Store the path to find it again
-      const path = getElementPath(element);
-      setTimeout(() => {
-        // Try to find the element again using the path
-        const doc = element.ownerDocument;
-        if (doc) {
-          try {
-            const newElement = doc.querySelector(path.split(' > ').pop() || '') as HTMLElement;
-            if (newElement) {
-              selectElement(newElement);
-            }
-          } catch (e) {
-            // If selector fails, clear selection
-            clearSelection();
-          }
-        }
-      }, 100);
-    }
-  }, [selectedElement, updateHtml, selectElement, clearSelection, getElementPath]);
+    // Note: We don't update HTML here to avoid flicker
+    // Changes will be saved when user clicks "Save Changes to Code"
+  }, [selectedElement]);
 
   const saveChanges = useCallback((iframe: HTMLIFrameElement) => {
     if (!iframe.contentDocument) return;
 
+    // Create snapshot before changes
+    const beforeSnapshot = createSnapshot();
+
     // Extract the updated HTML with inline styles
     const bodyContent = iframe.contentDocument.body.innerHTML;
     updateHtml(bodyContent);
+
+    // Create snapshot after changes
+    const afterSnapshot = createSnapshot();
+
+    // Add to history if there were actual changes
+    if (beforeSnapshot.html !== afterSnapshot.html) {
+      const command = new VisualEditCommand(
+        beforeSnapshot,
+        afterSnapshot,
+        'Visual edit: Updated element styles'
+      );
+      useHistoryStore.getState().addCommand(command);
+    }
   }, [updateHtml]);
 
   const enableVisualEditMode = useCallback(() => {

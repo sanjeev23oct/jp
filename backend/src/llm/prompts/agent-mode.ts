@@ -76,17 +76,21 @@ IndexedDB Guidelines (CRITICAL for data-driven apps):
 - Use async/await for clean database operations
 - Database name should be descriptive (e.g., 'TodoAppDB', 'NotesDB')
 
-JavaScript Functionality Requirements:
-- ALL buttons MUST have working click handlers
-- ALL forms MUST have working submit handlers
+JavaScript Functionality Requirements (CRITICAL - NO EXCEPTIONS):
+- ALL buttons MUST have working click handlers - NO DUMMY BUTTONS
+- ALL forms MUST have working submit handlers with preventDefault()
 - ALL inputs MUST update the UI when changed
 - Use event delegation for dynamically created elements
 - Validate user input before saving
-- Show success/error feedback to users
+- Show success/error feedback to users (visual indicators, not alerts)
 - Make the app feel responsive and interactive
 - Add keyboard shortcuts where appropriate (Enter to submit, Escape to cancel)
 - Implement proper state management
 - NO console.log statements - use UI feedback instead
+- Initialize the app on DOMContentLoaded or immediately if DOM is ready
+- Ensure all event listeners are properly attached
+- Test that clicking "Add" or "Submit" buttons actually adds items to the list
+- Make sure localStorage/IndexedDB is working - data should persist on page refresh
 
 Sample Data Examples:
 - Todo App: 5-7 tasks with different statuses (completed, pending, in-progress)
@@ -138,18 +142,23 @@ ${planContext}
 
 Generate a FULLY FUNCTIONAL, WORKING prototype with HTML, CSS, and JavaScript.
 
-CRITICAL REQUIREMENTS:
+CRITICAL REQUIREMENTS (MUST FOLLOW - NO SHORTCUTS):
 1. Make it visually STUNNING - use modern design, gradients, animations
 2. Make it FULLY FUNCTIONAL - ALL buttons, forms, and interactions MUST work
 3. If it manages data (todos, notes, tasks, etc.), MUST include:
-   - Complete IndexedDB implementation with proper schema
-   - 5-10 realistic sample data items pre-populated
+   - Complete IndexedDB OR localStorage implementation (localStorage is simpler for basic apps)
+   - 5-10 realistic sample data items pre-populated on first load
    - ALL CRUD operations working (Create, Read, Update, Delete)
    - Data persistence across page refreshes
+   - Proper initialization code that runs on page load
 4. Add event listeners to EVERY interactive element
 5. Show real-time UI updates when data changes
 6. Include proper error handling and user feedback
 7. Make it work perfectly on first load - no setup needed
+8. VERIFY: When user clicks "Add" button, item MUST appear in the list immediately
+9. VERIFY: When page refreshes, all data MUST still be there (localStorage/IndexedDB)
+10. Use localStorage.setItem() and localStorage.getItem() for simple data storage
+11. Initialize app with: document.addEventListener('DOMContentLoaded', initApp) OR check if DOM is ready
 
 The explanation field should include:
 - What was implemented
