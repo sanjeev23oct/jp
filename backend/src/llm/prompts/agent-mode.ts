@@ -29,6 +29,8 @@ IMPORTANT RULES:
 4. For HTML: ONLY include the body content (sections, divs, etc.) - NO <!DOCTYPE>, <html>, <head>, or <body> tags
 5. Keep code concise but beautiful - avoid excessive comments
 6. Ensure all JSON strings are properly escaped
+7. For complex apps: Focus on core functionality, avoid redundant code, use efficient patterns
+8. Prioritize working functionality over extensive features - start simple, make it work
 
 Guidelines for BEAUTIFUL, MODERN Design:
 - Generate production-quality, visually stunning code

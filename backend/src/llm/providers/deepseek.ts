@@ -40,7 +40,7 @@ export class DeepSeekProvider extends BaseLLMProvider {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${this.config.apiKey}`
           },
-          timeout: 300000, // 5 minutes for streaming
+          timeout: 600000, // 10 minutes for streaming
           responseType: 'stream'
         }
       );
@@ -128,7 +128,7 @@ export class DeepSeekProvider extends BaseLLMProvider {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${this.config.apiKey}`
           },
-          timeout: 180000 // 3 minutes for complex code generation
+          timeout: 600000 // 10 minutes for complex code generation
         }
       );
       
