@@ -8,6 +8,15 @@ import { useEditorStore } from './useEditorStore';
 import { useHistoryStore } from './useHistoryStore';
 import { AgentGenerationCommand, createSnapshot } from '../lib/commands';
 
+interface GenerationProgress {
+  status: 'planning' | 'generating' | 'parsing' | 'complete' | 'error' | 'retrying';
+  message: string;
+  startTime: Date;
+  lastActivity: Date;
+  retryAttempt?: number;
+  maxRetries?: number;
+}
+
 interface ChatState {
   messages: ChatMessage[];
   mode: ChatMode;
@@ -15,6 +24,7 @@ interface ChatState {
   error: string | null;
   currentProjectId: string | null;
   useMockMode: boolean; // For testing without LLM tokens
+  generationProgress: GenerationProgress | null;
 
   // Actions
   setMode: (mode: ChatMode) => void;
@@ -23,6 +33,8 @@ interface ChatState {
   setProjectId: (projectId: string | null) => void;
   addMessage: (message: ChatMessage) => void;
   toggleMockMode: () => void;
+  updateProgress: (progress: Partial<GenerationProgress>) => void;
+  clearProgress: () => void;
 }
 
 export const useChatStore = create<ChatState>((set, get) => ({
@@ -32,10 +44,25 @@ export const useChatStore = create<ChatState>((set, get) => ({
   error: null,
   currentProjectId: null,
   useMockMode: false, // Default to real mode for actual generation
+  generationProgress: null,
 
   setMode: (mode) => set({ mode }),
 
   toggleMockMode: () => set(state => ({ useMockMode: !state.useMockMode })),
+
+  updateProgress: (progress) => set(state => ({
+    generationProgress: state.generationProgress 
+      ? { ...state.generationProgress, ...progress }
+      : { 
+          status: 'generating', 
+          message: '', 
+          startTime: new Date(), 
+          lastActivity: new Date(),
+          ...progress 
+        }
+  })),
+
+  clearProgress: () => set({ generationProgress: null }),
 
   sendMessage: async (content, context) => {
     const state = get();
@@ -54,6 +81,30 @@ export const useChatStore = create<ChatState>((set, get) => ({
       isLoading: true,
       error: null
     });
+
+    // Initialize progress tracking
+    const startTime = Date.now();
+    let lastActivityTime = Date.now();
+    
+    get().updateProgress({
+      status: 'generating',
+      message: '🎯 Starting generation...',
+      startTime: new Date(),
+      lastActivity: new Date()
+    });
+
+    // Monitor for inactivity
+    const progressInterval = setInterval(() => {
+      const elapsed = Date.now() - lastActivityTime;
+      const totalElapsed = Math.floor((Date.now() - startTime) / 1000);
+      
+      if (elapsed > 10000) { // 10 seconds without activity
+        get().updateProgress({
+          message: `⏳ Still working... (${totalElapsed}s elapsed)`,
+          lastActivity: new Date()
+        });
+      }
+    }, 3000); // Check every 3 seconds
 
     try {
       // Use streaming endpoint (mock or real based on useMockMode)
@@ -75,6 +126,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
         }),
       });
 
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
       if (!response.body) throw new Error('No response body');
 
       const reader = response.body.getReader();
@@ -85,7 +140,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
       while (true) {
         const { done, value } = await reader.read();
-        if (done) break;
+        if (done) {
+          console.log('✅ Stream completed');
+          break;
+        }
 
         const chunk = decoder.decode(value);
         const lines = chunk.split('\n');
@@ -98,9 +156,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
             try {
               const event = JSON.parse(data);
               console.log('📨 Received event:', event.type, event);
+              lastActivityTime = Date.now();
 
               if (event.type === 'TextMessageStart') {
                 console.log('🆕 Creating new message:', event.messageId);
+                lastActivityTime = Date.now();
+                
                 // Create a new message for this messageId
                 const newMessage: ChatMessage = {
                   id: event.messageId,
@@ -115,8 +176,16 @@ export const useChatStore = create<ChatState>((set, get) => ({
                 set(state => ({
                   messages: [...state.messages, newMessage]
                 }));
+                
+                get().updateProgress({
+                  status: 'generating',
+                  message: '✨ Generating code...',
+                  lastActivity: new Date()
+                });
               } else if (event.type === 'TextMessageContent') {
                 console.log('📝 Updating message:', event.messageId, 'Delta:', event.delta);
+                lastActivityTime = Date.now();
+                
                 // Update the specific message by ID
                 const messageId = event.messageId;
 
@@ -127,6 +196,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
                       : msg
                   )
                 }));
+                
+                get().updateProgress({
+                  lastActivity: new Date()
+                });
               } else if (event.type === 'Custom' && event.name === 'code_generated') {
                 console.log('📦 Received code_generated event:', event.value);
 
@@ -160,15 +233,39 @@ export const useChatStore = create<ChatState>((set, get) => ({
                 }
               }
             } catch (e) {
-              console.error('Failed to parse event:', e);
+              console.error('Failed to parse event:', e, 'Data:', data);
+              // Continue processing other events even if one fails
             }
           }
         }
       }
 
+      // Clear progress interval
+      clearInterval(progressInterval);
+      
+      get().updateProgress({
+        status: 'complete',
+        message: '✅ Generation complete!',
+        lastActivity: new Date()
+      });
+      
+      // Clear progress after a short delay
+      setTimeout(() => {
+        get().clearProgress();
+      }, 2000);
+
       set({ isLoading: false });
 
     } catch (error) {
+      // Clear progress interval
+      clearInterval(progressInterval);
+      
+      get().updateProgress({
+        status: 'error',
+        message: `❌ ${error instanceof Error ? error.message : 'Failed to send message'}`,
+        lastActivity: new Date()
+      });
+      
       set({
         isLoading: false,
         error: error instanceof Error ? error.message : 'Failed to send message'

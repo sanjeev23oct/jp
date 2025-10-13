@@ -222,14 +222,58 @@ export const generateAgentPrompt = (
   description: string,
   context?: any
 ) => {
-  // For now, always use create mode
-  // In the future, we can detect modify/fix based on context
-  const userPrompt = AGENT_MODE_CREATE_PROMPT(description, context?.plan);
+  // Select prompt based on complexity and retry attempt
+  const retryAttempt = context?.retryAttempt || 0;
+  const strategy = context?.strategy || 'standard';
+  
+  let userPrompt: string;
+  
+  if (strategy === 'minimal' || retryAttempt >= 2) {
+    userPrompt = AGENT_MODE_CREATE_PROMPT_MINIMAL(description);
+  } else if (strategy === 'concise' || retryAttempt >= 1) {
+    userPrompt = AGENT_MODE_CREATE_PROMPT_CONCISE(description, context?.plan);
+  } else {
+    userPrompt = AGENT_MODE_CREATE_PROMPT(description, context?.plan);
+  }
 
   return {
     systemPrompt: AGENT_MODE_SYSTEM_PROMPT,
     userPrompt
   };
+};
+
+export const AGENT_MODE_CREATE_PROMPT_CONCISE = (description: string, plan?: any) => {
+  const planContext = plan ? `Plan: ${plan.components?.join(', ')}` : '';
+
+  return `Create working HTML prototype: ${description}
+${planContext}
+
+CONCISE MODE - Keep it minimal:
+1. Core functionality ONLY
+2. Minimal comments
+3. Compact, production-ready code
+4. Essential styling (functional, not fancy)
+5. Use localStorage for data (simpler than IndexedDB)
+6. 5-7 sample records max
+7. Focus on working features over extensive styling
+
+JSON output only (no markdown):
+{"html":"...","css":"...","js":"...","explanation":"...","suggestions":[]}`;
+};
+
+export const AGENT_MODE_CREATE_PROMPT_MINIMAL = (description: string) => {
+  return `Minimal viable prototype: ${description}
+
+ULTRA-MINIMAL:
+- Core features ONLY
+- Basic styling
+- Essential JS
+- 3-5 sample records
+- No comments
+- Compact code
+
+JSON only:
+{"html":"...","css":"...","js":"...","explanation":"...","suggestions":[]}`;
 };
 
 export const generatePlanPrompt = (description: string) => {

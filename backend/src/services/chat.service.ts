@@ -29,7 +29,10 @@ export class ChatService {
         return await this.processAgentMode(request);
       }
     } catch (error) {
-      logger.error('Error processing chat message', { error });
+      logger.error('Error processing chat message', {
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined
+      });
       throw error;
     }
   }

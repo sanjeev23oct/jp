@@ -11,6 +11,11 @@ import { generateAgentPrompt, generatePlanPrompt } from '../llm/prompts/agent-mo
 import logger from '../utils/logger';
 import { v4 as uuidv4 } from 'uuid';
 import { responseCacheService } from './response-cache.service';
+import { JSONParser } from '../utils/json-parser';
+import { RetryManager } from '../utils/retry-manager';
+import { ErrorMessageMapper } from '../utils/error-message-mapper';
+import { TimeoutManager } from '../utils/timeout-manager';
+import { PromptOptimizer } from '../utils/prompt-optimizer';
 
 export class ChatStreamService {
   private llm = LLMFactory.createLLM();
@@ -60,7 +65,11 @@ export class ChatStreamService {
       res.end();
 
     } catch (error) {
-      logger.error('Error in streaming processing', { error });
+      // Safely log error without circular references
+      logger.error('Error in streaming processing', {
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined
+      });
       
       // Send RunError event
       this.sendEvent(res, 'RunError', {
@@ -158,12 +167,108 @@ ${plan.dataModel ? `**Data Model:** ${plan.dataModel}\n\n` : ''}**Tech Stack:** 
       timestamp: new Date().toISOString()
     });
 
-    // Step 2: Generate Code
+    // Step 2: Generate Code with Retry Logic
+    const retryManager = new RetryManager({
+      maxAttempts: 3,
+      baseDelay: 2000,
+      maxDelay: 16000,
+      retryableErrors: ['timeout', 'econnreset', 'rate limit', 'network', 'enotfound', 'etimedout', 'parse', 'unterminated', 'truncated', 'incomplete']
+    });
+
+    // Select prompt strategy based on complexity
+    const strategy = PromptOptimizer.selectStrategy(request.message);
+    logger.info('Selected prompt strategy', { strategy: strategy.type });
+
     const messageId = uuidv4();
+
+    while (true) {
+      try {
+        // Pass retry attempt to use more concise prompts on retries
+        const currentStrategy = PromptOptimizer.selectStrategy(
+          request.message, 
+          retryManager.getAttemptNumber() - 1
+        );
+        
+        await this.generateCodeWithStreaming(request, res, messageId, plan, currentStrategy.type);
+        break; // Success, exit retry loop
+      } catch (error) {
+        const err = error as Error;
+        
+        // Log the actual error for debugging
+        logger.error('Generation attempt failed', {
+          message: err.message,
+          stack: err.stack,
+          attempt: retryManager.getAttemptNumber()
+        });
+        
+        if (!retryManager.shouldRetry(err)) {
+          // Not retryable or max attempts reached
+          logger.error('Generation failed after retries', {
+            error: err.message,
+            attempts: retryManager.getAttemptNumber()
+          });
+          
+          // Get user-friendly error message
+          const friendlyMessage = ErrorMessageMapper.getUserFriendlyMessage(err, {
+            retryAttempt: retryManager.getAttemptNumber() - 1,
+            maxRetries: retryManager.getTotalAttempts()
+          });
+          
+          const suggestions = ErrorMessageMapper.getSuggestions(err);
+          
+          // Send error message
+          this.sendEvent(res, 'TextMessageContent', {
+            type: 'TextMessageContent',
+            messageId,
+            delta: `\n\n${friendlyMessage}\n\n${suggestions.length > 0 ? `**Suggestions:**\n${suggestions.map(s => `- ${s}`).join('\n')}\n` : ''}`,
+            timestamp: new Date().toISOString()
+          });
+          
+          this.sendEvent(res, 'TextMessageEnd', {
+            type: 'TextMessageEnd',
+            messageId,
+            timestamp: new Date().toISOString()
+          });
+          
+          throw err;
+        }
+        
+        // Notify user of retry with friendly message
+        const delay = retryManager.getDelay();
+        const retryMessage = ErrorMessageMapper.getUserFriendlyMessage(err, {
+          retryAttempt: retryManager.getAttemptNumber() - 1,
+          maxRetries: retryManager.getTotalAttempts()
+        });
+        
+        this.sendEvent(res, 'TextMessageContent', {
+          type: 'TextMessageContent',
+          messageId,
+          delta: `\n\n${retryMessage}\n\nWaiting ${delay / 1000}s before retry...\n\n`,
+          timestamp: new Date().toISOString()
+        });
+        
+        // Wait before retry
+        await new Promise(resolve => setTimeout(resolve, delay));
+        
+        retryManager.incrementAttempt();
+      }
+    }
+  }
+
+  /**
+   * Generate code with streaming (extracted for retry logic)
+   */
+  private async generateCodeWithStreaming(
+    request: ChatRequest,
+    res: Response,
+    messageId: string,
+    plan: any,
+    strategy: 'standard' | 'concise' | 'minimal' = 'standard'
+  ) {
 
     const { systemPrompt, userPrompt } = generateAgentPrompt(
       request.message,
-      { ...request.context, plan }
+      { ...request.context, plan, strategy }
     );
 
     const messages = [
@@ -198,13 +303,25 @@ ${plan.dataModel ? `**Data Model:** ${plan.dataModel}\n\n` : ''}**Tech Stack:** 
     let accumulatedContent = '';
     let lastProgressUpdate = Date.now();
 
+    // Initialize timeout manager
+    const timeoutManager = new TimeoutManager({
+      initial: 120000,      // 2 minutes
+      perRetry: 60000,      // +1 minute per retry
+      maximum: 600000,      // 10 minutes max
+      activityWindow: 30000 // 30 seconds without data
+    });
+
     // Stream response from LLM with real-time updates
+    // DeepSeek-V2 supports max 8192 output tokens
     const response = await this.llm.streamComplete?.({
       messages,
-      maxTokens: 8192 // Maximum for DeepSeek
+      maxTokens: 8192 // DeepSeek max output tokens
     }, (chunk: string) => {
       // Accumulate content silently
       accumulatedContent += chunk;
+      
+      // Record activity for timeout monitoring
+      timeoutManager.recordActivity();
 
       // Send progress updates every 2 seconds
       const now = Date.now();
@@ -219,7 +336,7 @@ ${plan.dataModel ? `**Data Model:** ${plan.dataModel}\n\n` : ''}**Tech Stack:** 
       }
     }) || await this.llm.complete({
       messages,
-      maxTokens: 8192
+      maxTokens: 8192 // Match streaming limit
     });
 
     const content = response?.content || accumulatedContent;
@@ -229,34 +346,68 @@ ${plan.dataModel ? `**Data Model:** ${plan.dataModel}\n\n` : ''}**Tech Stack:** 
       finishReason: response?.finishReason,
       usage: response?.usage
     });
+    
+    // Check if we hit the token limit
+    if (response?.finishReason === 'length') {
+      logger.warn('Response truncated due to token limit', {
+        maxTokens: 8192,
+        contentLength: content.length
+      });
+    }
+    
     logger.debug('LLM response preview', { preview: content.substring(0, 500) });
 
     // Try to parse as JSON for code generation
     try {
       const parsed = this.parseAgentResponse(content);
+      
+      // Check if response was partial
+      const isPartial = parsed.explanation?.includes('partial response');
+      
       logger.info('Successfully parsed agent response', {
         hasHtml: !!parsed.html,
         hasCss: !!parsed.css,
-        hasJs: !!parsed.js
+        hasJs: !!parsed.js,
+        isPartial
       });
-
-      if (parsed.html) {
-        // Save to cache for future mock use
-        responseCacheService.saveResponse(request.message, {
-          html: parsed.html,
-          css: parsed.css || '',
-          js: parsed.js || '',
-          explanation: parsed.explanation || '',
-          suggestions: parsed.suggestions || []
+      
+      if (isPartial) {
+        logger.warn('Partial response detected and recovered', {
+          htmlLength: parsed.html?.length || 0,
+          cssLength: parsed.css?.length || 0,
+          jsLength: parsed.js?.length || 0
         });
+      }
+
+      // Check if we have any usable content (html field exists, even if empty)
+      if ('html' in parsed) {
+        // Save to cache for future mock use (only if html has content)
+        if (parsed.html) {
+          responseCacheService.saveResponse(request.message, {
+            html: parsed.html,
+            css: parsed.css || '',
+            js: parsed.js || '',
+            explanation: parsed.explanation || '',
+            suggestions: parsed.suggestions || []
+          });
+        }
 
         // Format detailed implementation summary
         const explanation = parsed.explanation || 'Code generated successfully!';
         const suggestions = parsed.suggestions || [];
+        
+        // Add warning if partial response or empty html
+        let partialWarning = '';
+        if (isPartial) {
+          partialWarning = `\n\n⚠️ **Note:** Response was incomplete but recovered. The code may be missing some features. Consider regenerating if needed.\n`;
+        }
+        if (!parsed.html || parsed.html.trim() === '') {
+          partialWarning += `\n\n⚠️ **Warning:** No HTML content was generated. Please try again with a different request.\n`;
+        }
 
         const summaryText = `\n\n✅ **Implementation Complete!**
 
-${explanation}
+${explanation}${partialWarning}
 
 ${suggestions.length > 0 ? `**Next Steps & Suggestions:**
 ${suggestions.map((s: string, i: number) => `${i + 1}. ${s}`).join('\n')}` : ''}
@@ -322,6 +473,8 @@ ${suggestions.map((s: string, i: number) => `${i + 1}. ${s}`).join('\n')}` : ''}
         messageId,
         timestamp: new Date().toISOString()
       });
+      
+      throw e; // Re-throw for retry logic
     }
   }
 
@@ -385,70 +538,38 @@ ${suggestions.map((s: string, i: number) => `${i + 1}. ${s}`).join('\n')}` : ''}
   }
 
   /**
-   * Parse agent response (same logic as non-streaming)
+   * Parse agent response with recovery for incomplete JSON
    */
   private parseAgentResponse(content: string): any {
-    const trimmed = content.trim();
-
-    // Remove markdown code blocks if present
-    let cleanContent = trimmed;
-    if (trimmed.startsWith('```')) {
-      cleanContent = trimmed.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '').trim();
+    const result = JSONParser.parseWithRecovery(content);
+    
+    if (!result.success) {
+      logger.error('Failed to parse agent response', { error: result.error });
+      throw new Error(result.error || 'Failed to parse response');
     }
-
-    if (cleanContent.startsWith('{')) {
-      // Find the actual end of the JSON object by counting braces
-      let depth = 0;
-      let inString = false;
-      let escape = false;
-      let jsonEnd = -1;
-
-      for (let i = 0; i < cleanContent.length; i++) {
-        const char = cleanContent[i];
-
-        if (escape) {
-          escape = false;
-          continue;
-        }
-
-        if (char === '\\') {
-          escape = true;
-          continue;
-        }
-
-        if (char === '"') {
-          inString = !inString;
-          continue;
-        }
-
-        if (!inString) {
-          if (char === '{') {
-            depth++;
-          } else if (char === '}') {
-            depth--;
-            if (depth === 0) {
-              jsonEnd = i + 1;
-              break;
-            }
-          }
-        }
-      }
-
-      let jsonStr = jsonEnd > 0 ? cleanContent.substring(0, jsonEnd) : cleanContent;
-
-      try {
-        return JSON.parse(jsonStr);
-      } catch (e) {
-        logger.error('JSON parse error', {
-          error: e instanceof Error ? e.message : String(e),
-          jsonPreview: jsonStr.substring(0, 500),
-          jsonEnd
-        });
-        throw e;
-      }
+    
+    if (result.isPartial) {
+      logger.warn('Parsed partial/incomplete response', {
+        missingFields: result.missingFields
+      });
     }
-
-    throw new Error('Not valid JSON - content does not start with {');
+    
+    // Fill in missing fields with defaults
+    const data = result.data;
+    if (!data.html) data.html = '';
+    if (!data.css) data.css = '';
+    if (!data.js) data.js = '';
+    if (!data.explanation) data.explanation = result.isPartial 
+      ? 'Code generated (partial response - may be incomplete)'
+      : 'Code generated successfully';
+    if (!data.suggestions) data.suggestions = [];
+    
+    // Add warning to suggestions if partial
+    if (result.isPartial) {
+      data.suggestions.unshift('Response was incomplete - consider regenerating for full code');
+    }
+    
+    return data;
   }
 }
 
