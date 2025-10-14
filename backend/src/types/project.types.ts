@@ -1,44 +1,61 @@
 /**
- * Project Types for Lovable.dev Clone
+ * Project Types
  */
+
+export type ProjectType = 'prototype' | 'requirements';
 
 export interface Project {
   id: string;
   name: string;
   description?: string;
-  thumbnail?: string;
-  createdAt: Date;
-  updatedAt: Date;
-  pages: Page[];
-  assets: Asset[];
-  settings: ProjectSettings;
-}
-
-export interface Page {
-  id: string;
-  name: string;
-  path: string;
+  type: ProjectType;
   html: string;
   css: string;
   js: string;
-  isHomePage: boolean;
-  createdAt: Date;
-  updatedAt: Date;
+  requirements?: string;
+  thumbnail?: string;
+  template?: string;
+  tags?: string[];
+  created_at: Date;
+  updated_at: Date;
+  last_opened_at?: Date;
 }
 
-export interface Asset {
+export interface ProjectVersion {
   id: string;
-  name: string;
-  type: 'image' | 'icon' | 'font' | 'other';
-  url: string;
-  size: number;
-  uploadedAt: Date;
+  project_id: string;
+  html: string;
+  css: string;
+  js: string;
+  description?: string;
+  generation_prompt?: string;
+  created_at: Date;
 }
 
-export interface ProjectSettings {
-  viewport: 'mobile' | 'tablet' | 'desktop';
-  theme: 'light' | 'dark';
-  includeIndexedDB: boolean;
-  sampleData?: any;
+export interface CreateProjectRequest {
+  name?: string;
+  description?: string;
+  type?: ProjectType;
+  html?: string;
+  css?: string;
+  js?: string;
+  requirements?: string;
+  template?: string;
 }
 
+export interface UpdateProjectRequest {
+  name?: string;
+  description?: string;
+  type?: ProjectType;
+  html?: string;
+  css?: string;
+  js?: string;
+  requirements?: string;
+  thumbnail?: string;
+  tags?: string[];
+}
+
+export interface CreateVersionRequest {
+  description?: string;
+  generation_prompt?: string;
+}

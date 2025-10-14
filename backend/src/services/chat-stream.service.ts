@@ -8,6 +8,7 @@ import { LLMFactory } from '../llm';
 import { ChatRequest, ChatMode, MessageRole } from '../types/chat.types';
 import { generateChatResponse } from '../llm/prompts/chat-mode';
 import { generateAgentPrompt, generatePlanPrompt } from '../llm/prompts/agent-mode';
+import { BA_MODE_SYSTEM_PROMPT, BA_MODE_USER_PROMPT_TEMPLATE } from '../llm/prompts/ba-mode';
 import logger from '../utils/logger';
 import { v4 as uuidv4 } from 'uuid';
 import { responseCacheService } from './response-cache.service';
@@ -91,6 +92,21 @@ export class ChatStreamService {
     runId: string,
     threadId: string
   ) {
+    // Check if BA mode is active
+    const isBAMode = request.context?.appMode === 'ba';
+    
+    logger.info('Agent mode processing', { 
+      appMode: request.context?.appMode, 
+      isBAMode,
+      hasContext: !!request.context 
+    });
+
+    // If BA mode, use chat mode processing instead
+    if (isBAMode) {
+      logger.info('BA mode detected in agent mode, switching to chat mode processing');
+      return this.processChatModeStreaming(request, res, runId, threadId);
+    }
+
     // Step 1: Generate Plan
     const planMessageId = uuidv4();
 
@@ -497,10 +513,30 @@ ${suggestions.map((s: string, i: number) => `${i + 1}. ${s}`).join('\n')}` : ''}
       timestamp: new Date().toISOString()
     });
 
-    const { systemPrompt, userPrompt } = generateChatResponse(
-      request.message,
-      request.context
-    );
+    // Check if BA mode is active
+    const isBAMode = request.context?.appMode === 'ba';
+    
+    logger.info('Chat mode processing', { 
+      appMode: request.context?.appMode, 
+      isBAMode,
+      hasContext: !!request.context 
+    });
+    
+    let systemPrompt: string;
+    let userPrompt: string;
+    
+    if (isBAMode) {
+      // Use EARS requirements generation prompt
+      systemPrompt = BA_MODE_SYSTEM_PROMPT;
+      userPrompt = BA_MODE_USER_PROMPT_TEMPLATE(request.message);
+      logger.info('Using BA Mode (EARS) prompt');
+    } else {
+      // Use regular chat prompt
+      const prompts = generateChatResponse(request.message, request.context);
+      systemPrompt = prompts.systemPrompt;
+      userPrompt = prompts.userPrompt;
+      logger.info('Using regular chat prompt');
+    }
 
     const messages = [
       { role: 'system' as const, content: systemPrompt },

@@ -5,6 +5,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useChatStore } from '../../store/useChatStore';
 import { useEditorStore } from '../../store/useEditorStore';
+import { useModeStore } from '../../store/useModeStore';
 import { ChatMessage } from './ChatMessage';
 import { ModeSelector } from './ModeSelector';
 import { Button } from '../ui/button';
@@ -17,6 +18,7 @@ export function ChatInterface() {
   
   const { messages, mode, isLoading, error, useMockMode, setMode, sendMessage, toggleMockMode } = useChatStore();
   const { currentCode } = useEditorStore();
+  const { mode: appMode } = useModeStore();
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
@@ -30,9 +32,11 @@ export function ChatInterface() {
     setInput('');
 
     try {
+      console.log('🔍 Sending message with appMode:', appMode);
       await sendMessage(message, {
         currentCode: currentCode ? currentCode : undefined,
         viewport: 'desktop',
+        appMode: appMode, // Send current app mode (prototype or ba)
       });
 
       // Code is automatically updated in the store via streaming events
@@ -86,17 +90,29 @@ export function ChatInterface() {
         {messages.length === 0 ? (
           <div className="flex items-center justify-center h-full p-8">
             <div className="text-center space-y-4 max-w-md">
-              <div className="text-4xl">👋</div>
-              <h3 className="text-xl font-semibold">Welcome to HTML Prototype Builder</h3>
+              <div className="text-4xl">{appMode === 'ba' ? '📋' : '👋'}</div>
+              <h3 className="text-xl font-semibold">
+                {appMode === 'ba' 
+                  ? 'EARS Requirements Assistant' 
+                  : 'Welcome to HTML Prototype Builder'}
+              </h3>
               <p className="text-muted-foreground">
-                {mode === 'agent' 
-                  ? 'Describe what you want to build, and I\'ll generate the code for you.'
-                  : 'Ask me anything about your prototype, and I\'ll help you plan and debug.'}
+                {appMode === 'ba'
+                  ? 'Describe your feature or system, and I\'ll help you write requirements in EARS format.'
+                  : mode === 'agent' 
+                    ? 'Describe what you want to build, and I\'ll generate the code for you.'
+                    : 'Ask me anything about your prototype, and I\'ll help you plan and debug.'}
               </p>
               <div className="text-sm text-muted-foreground space-y-2">
                 <p className="font-medium">Try asking:</p>
                 <ul className="space-y-1">
-                  {mode === 'agent' ? (
+                  {appMode === 'ba' ? (
+                    <>
+                      <li>"Write requirements for a user login system"</li>
+                      <li>"Convert this to EARS format: Users should be able to..."</li>
+                      <li>"Help me document a payment processing feature"</li>
+                    </>
+                  ) : mode === 'agent' ? (
                     <>
                       <li>"Create a landing page for a SaaS product"</li>
                       <li>"Build a todo list with local storage"</li>
@@ -138,7 +154,9 @@ export function ChatInterface() {
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder={
-              mode === 'agent'
+              appMode === 'ba'
+                ? 'Describe your feature or requirement in plain English...'
+                : mode === 'agent'
                 ? 'Describe what you want to build...'
                 : 'Ask a question or describe your idea...'
             }

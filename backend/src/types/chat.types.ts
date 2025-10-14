@@ -36,6 +36,7 @@ export interface ChatRequest {
     currentCode?: string;
     selectedElement?: string;
     viewport?: 'mobile' | 'tablet' | 'desktop';
+    appMode?: 'prototype' | 'ba'; // Application mode
   };
 }
 

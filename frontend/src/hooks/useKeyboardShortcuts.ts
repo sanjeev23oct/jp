@@ -4,9 +4,11 @@
 
 import { useEffect } from 'react';
 import { useHistoryStore } from '../store/useHistoryStore';
+import { useProjectStore } from '../store/useProjectStore';
 
 export function useKeyboardShortcuts() {
   const { undo, redo, canUndo, canRedo } = useHistoryStore();
+  const { saveProject, currentProject } = useProjectStore();
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -15,6 +17,16 @@ export function useKeyboardShortcuts() {
       const modifierKey = isMac ? event.metaKey : event.ctrlKey;
 
       if (!modifierKey) return;
+
+      // Save: Ctrl+S / Cmd+S
+      if (event.key === 's') {
+        event.preventDefault();
+        if (currentProject) {
+          saveProject();
+          console.log('⌨️ Keyboard shortcut: Save');
+        }
+        return;
+      }
 
       // Undo: Ctrl+Z / Cmd+Z
       if (event.key === 'z' && !event.shiftKey) {
@@ -47,5 +59,5 @@ export function useKeyboardShortcuts() {
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [undo, redo, canUndo, canRedo]);
+  }, [undo, redo, canUndo, canRedo, saveProject, currentProject]);
 }

@@ -103,14 +103,14 @@ export const BAView: React.FC = () => {
         <div className="flex-1 flex overflow-hidden">
           {/* Requirements Editor - Visible when no preview or in split mode */}
           {(!showPreview || showSplit) && (
-            <div className={showSplit ? 'w-1/2 border-r overflow-y-auto' : 'w-full overflow-y-auto'}>
+            <div className={showSplit ? 'w-1/2 border-r h-full' : 'w-full h-full'}>
               <RequirementsEditor />
             </div>
           )}
 
           {/* Markdown Preview - Full width or split based on mode */}
           {showPreview && (
-            <div className={showSplit ? 'w-1/2 overflow-y-auto bg-white' : 'w-full overflow-y-auto bg-white'}>
+            <div className={showSplit ? 'w-1/2 bg-white h-full' : 'w-full bg-white h-full'}>
               <MarkdownPreview />
             </div>
           )}

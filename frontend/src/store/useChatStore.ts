@@ -6,6 +6,8 @@ import { create } from 'zustand';
 import { ChatMessage, ChatMode, MessageRole } from '../types/chat';
 import { useEditorStore } from './useEditorStore';
 import { useHistoryStore } from './useHistoryStore';
+import { useModeStore } from './useModeStore';
+import { useProjectStore } from './useProjectStore';
 import { AgentGenerationCommand, createSnapshot } from '../lib/commands';
 
 interface GenerationProgress {
@@ -200,6 +202,65 @@ export const useChatStore = create<ChatState>((set, get) => ({
                 get().updateProgress({
                   lastActivity: new Date()
                 });
+              } else if (event.type === 'TextMessageEnd') {
+                console.log('✅ Message complete:', event.messageId);
+                lastActivityTime = Date.now();
+                
+                // Check if we're in BA mode and update requirements
+                const { mode: appMode } = useModeStore.getState();
+                console.log('🔍 Current appMode:', appMode);
+                if (appMode === 'ba') {
+                  // Get message from state, not from map (state is more reliable)
+                  const currentMessages = get().messages;
+                  const message = currentMessages.find(m => m.id === event.messageId);
+                  console.log('🔍 Message from state:', message?.content?.substring(0, 100));
+                  
+                  if (message && message.content && message.content.trim().length > 0) {
+                    console.log('📝 Updating requirements with generated content (length:', message.content.length, ')');
+                    // Update the project's requirements field
+                    useProjectStore.getState().saveProject({
+                      requirements: message.content
+                    });
+                  } else {
+                    console.warn('⚠️ No message content found or empty for messageId:', event.messageId);
+                  }
+                } else {
+                  console.log('ℹ️ Not in BA mode, skipping requirements update');
+                }
+              } else if (event.type === 'RunCompleted' || event.type === 'RunFinished') {
+                console.log('🏁 Run completed/finished');
+                lastActivityTime = Date.now();
+                
+                // When run completes in BA mode, save all message content
+                const { mode: appMode } = useModeStore.getState();
+                console.log('🔍 RunCompleted/Finished - appMode:', appMode);
+                
+                if (appMode === 'ba') {
+                  // Get all assistant messages from state (more reliable than map)
+                  const currentMessages = get().messages;
+                  const assistantMessages = currentMessages.filter(msg => msg.role === MessageRole.ASSISTANT);
+                  console.log('🔍 Assistant messages from state:', assistantMessages.length);
+                  
+                  const allContent = assistantMessages
+                    .map(msg => msg.content)
+                    .filter(content => content && content.trim().length > 0)
+                    .join('\n\n');
+                  
+                  console.log('🔍 Combined content length:', allContent.length);
+                  
+                  if (allContent.trim().length > 0) {
+                    console.log('📝 Saving all requirements content on run completion');
+                    useProjectStore.getState().saveProject({
+                      requirements: allContent
+                    });
+                    
+                    // Auto-show preview after AI generates requirements
+                    console.log('🔄 Auto-showing preview after AI response');
+                    window.dispatchEvent(new CustomEvent('ba-show-preview'));
+                  } else {
+                    console.warn('⚠️ No content to save');
+                  }
+                }
               } else if (event.type === 'Custom' && event.name === 'code_generated') {
                 console.log('📦 Received code_generated event:', event.value);
 

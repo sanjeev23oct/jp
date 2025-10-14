@@ -10,6 +10,7 @@ import chatRoutes from './routes/chat.routes';
 import chatStreamRoutes from './routes/chat-stream.routes';
 import chatMockRoutes from './routes/chat-mock.routes';
 import surgicalEditRoutes from './routes/surgical-edit.routes';
+import projectRoutes from './routes/project.routes';
 
 const app = express();
 
@@ -62,9 +63,7 @@ app.use('/api/chat', chatMockRoutes); // Mock endpoint for testing (no LLM token
 app.use('/api/chat', chatStreamRoutes); // AG-UI streaming endpoint
 app.use('/api/chat', chatRoutes); // Legacy non-streaming endpoint
 app.use('/api/surgical-edit', surgicalEditRoutes); // Surgical edit endpoint
-// TODO: Add more routes
-// app.use('/api/projects', projectRoutes);
-// app.use('/api/code', codeRoutes);
+app.use('/api', projectRoutes); // Project management routes
 
 // Error handling
 app.use(errorHandler);
